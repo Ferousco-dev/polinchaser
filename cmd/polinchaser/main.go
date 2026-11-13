@@ -20,6 +20,7 @@ import (
 	"github.com/Ferousco-dev/polinchaser/internal/server"
 	"github.com/Ferousco-dev/polinchaser/internal/store"
 	"github.com/Ferousco-dev/polinchaser/internal/webhook"
+	"github.com/Ferousco-dev/polinchaser/internal/worker"
 	"github.com/Ferousco-dev/polinchaser/pkg/scanner"
 )
 
@@ -88,6 +89,14 @@ func main() {
 		defer cancel()
 		_ = srv.Shutdown(sctx)
 	}()
+	if os.Getenv("RUN_WORKER") == "true" {
+		// Single-service mode (e.g. Render free tier): run the worker in this process.
+		go func() {
+			if err := worker.Run(ctx, cfg, pool, log.With("component", "worker")); err != nil {
+				log.Error("embedded worker failed; scans will not run", "err", err)
+			}
+		}()
+	}
 	log.Info("listening", "config", cfg.String())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("server", "err", err)
