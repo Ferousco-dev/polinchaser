@@ -171,12 +171,21 @@ async function pOverview(el) {
 }
 
 async function pRepos(el) {
-  const rows = await api("/api/repositories");
-  add(el, head("Repositories", "Repositories granted to the GitHub App."),
-    card(null, table(["Repository", "Installation", "Last scan", "Open", "High / critical"], rows.map((r) => ({ id: r.id, r, cells: [
-      h("div", {}, h("span", { class: "trunc" }, r.full_name), h("div", { class: "hint" }, r.default_branch + (r.private ? " · private" : ""))), r.installation,
-      r.last_scan_status ? h("span", {}, chip(r.last_scan_status), " ", h("span", { class: "hint" }, fmt.rel(r.last_scan_at))) : h("span", { class: "hint" }, "not scanned"),
-      fmt.num(r.open_findings), r.blocking_findings > 0 ? chip("critical", fmt.num(r.blocking_findings)) : "0"] })), (r) => go("/findings?repo_id=" + r.id))));
+  const all = await api("/api/repositories");
+  const body = h("div", {});
+  const q = h("input", { class: "field", type: "search", placeholder: "Search repositories", "aria-label": "Search repositories", autocomplete: "off", maxlength: 120 });
+  const draw = () => {
+    const term = q.value.trim().toLowerCase();
+    const rows = term ? all.filter((r) => (r.full_name + " " + r.installation).toLowerCase().includes(term)) : all;
+    rep(body, rows.length === 0 ? h("p", { class: "hint" }, term ? "No repositories match your search." : "No repositories yet.") :
+      table(["Repository", "Installation", "Last scan", "Open", "High / critical"], rows.map((r) => ({ id: r.id, r, cells: [
+        h("div", {}, h("span", { class: "trunc" }, r.full_name), h("div", { class: "hint" }, r.default_branch + (r.private ? " · private" : ""))), r.installation,
+        r.last_scan_status ? h("span", {}, chip(r.last_scan_status), " ", h("span", { class: "hint" }, fmt.rel(r.last_scan_at))) : h("span", { class: "hint" }, "not scanned"),
+        fmt.num(r.open_findings), r.blocking_findings > 0 ? chip("critical", fmt.num(r.blocking_findings)) : "0"] })), (r) => go("/findings?repo_id=" + r.id)));
+  };
+  q.addEventListener("input", draw);
+  add(el, head("Repositories", `${all.length} repositories granted to the GitHub App.`), card(null, h("div", {}, q, body)));
+  draw();
 }
 
 function pager(state, rerender, count) {
