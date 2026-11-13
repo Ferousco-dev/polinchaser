@@ -122,15 +122,16 @@ tbody tr.link:hover { background: var(--hover); }
 .toast { position: fixed; right: 16px; bottom: 16px; z-index: 80; background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 6px; font-size: 13px; max-width: 320px; }
 
 /* Charts */
-.chart { position: relative; }
+.chart { position: relative; padding: 10px 16px 16px; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .chart .grid-l { stroke: var(--line); stroke-width: 1; }
-.chart text { fill: var(--muted); font: 11px var(--font); }
+.chart text { fill: var(--muted); font: 10px var(--font); }
 .chart .tip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--line2); border-radius: 6px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.12); transform: translate(-50%, -100%); white-space: nowrap; z-index: 5; }
 .chart .tip b { display: block; margin-bottom: 4px; font-weight: 600; }
 .chart .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
-.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--ink2); }
-.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+.legend { display: flex; gap: 6px 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--ink2); }
+.legend span { display: inline-flex; align-items: center; white-space: nowrap; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; flex: none; }
 .hbar { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 40px; gap: 10px; align-items: center; font-size: 12px; padding: 5px 16px; }
 .hbar .track { height: 8px; border-radius: 4px; background: var(--hover); overflow: hidden; }
 .hbar .fill { height: 100%; border-radius: 4px; background: var(--blue); }

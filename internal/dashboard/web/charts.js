@@ -2,7 +2,7 @@
 // themes and the palette live in one place (styles.css).
 import { h, svg, fmt } from "./lib.js";
 
-const W = 640, H = 220, M = { t: 10, r: 10, b: 24, l: 34 };
+const W = 420, H = 200, M = { t: 10, r: 8, b: 22, l: 28 };
 
 function niceMax(v) {
   // The axis has four intervals, so pick a whole-number step: labels stay integers.
@@ -59,7 +59,7 @@ export function stackedBars(data, series) {
   const box = h("div", { class: "chart" });
   const max = niceMax(Math.max(1, ...data.map((d) => series.reduce((a, s) => a + Number(d[s.key] || 0), 0))));
   const { root, iw, ih } = frame(data, max, Math.ceil(data.length / 7));
-  const bw = (iw / data.length) * 0.62;
+  const bw = Math.min((iw / data.length) * 0.62, 22);
   data.forEach((d, i) => {
     let y = M.t + ih;
     const x = M.l + (iw * (i + 0.5)) / data.length - bw / 2;
