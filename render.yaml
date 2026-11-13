@@ -1,0 +1,58 @@
+# Render Blueprint for PolinChaser. Review before applying; nothing here deploys itself.
+# The database is Neon (not Render Postgres), so there is no `databases:` block.
+# Every secret is `sync: false`: Render asks you for it in the dashboard and it never lives in git.
+
+envVarGroups:
+  - name: polinchaser-shared
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL        # Neon DIRECT connection string (not the pooled "-pooler" host)
+        sync: false
+      - key: BASE_URL            # https://chaser.yourdomain.com  (the dashboard subdomain)
+        sync: false
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: NOTIFY_DEFAULT_RECIPIENTS
+        sync: false
+      - key: NOTIFY_MIN_SEVERITY
+        value: high
+
+services:
+  - type: web
+    name: polinchaser-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /readyz
+    autoDeploy: false            # deploy on purpose, never on every push
+    envVars:
+      - fromGroup: polinchaser-shared
+      - key: ADMIN_SETUP_TOKEN   # 32+ chars; only needed until your first passkey exists
+        sync: false
+      - key: TRUSTED_PROXY_HOPS  # Render adds one proxy hop in front of the service
+        value: "1"
+
+  - type: worker
+    name: polinchaser-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: /polinchaser-worker
+    plan: starter
+    autoDeploy: false
+    envVars:
+      - fromGroup: polinchaser-shared
+      - key: WORKER_CONCURRENCY
+        value: "2"
+      - key: SCAN_TIMEOUT
+        value: 10m

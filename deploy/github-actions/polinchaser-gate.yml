@@ -1,0 +1,32 @@
+# Copy to .github/workflows/polinchaser-gate.yml in the repository you want to protect.
+# Uses only the preinstalled gh CLI; no third-party actions. Status: NOT VERIFIED against a live run.
+name: polinchaser-gate
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  checks: read
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: Wait for PolinChaser result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          ALLOW_WARNINGS: "true"
+        run: bash deploy/gate/wait-for-polinchaser.sh
+  deploy:
+    needs: gate
+    if: ${{ vars.RENDER_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: curl -fsS -X POST --max-time 30 "$HOOK" >/dev/null && echo "deploy requested"
