@@ -91,12 +91,12 @@ func TestRefreshAddsSignaturesAndEngineMatchesThem(t *testing.T) {
 	e := newEnv(t, feedJSON(sig("T-1", "feed-marker-ABCDEF")))
 	ctx := context.Background()
 	_, v0 := e.mgr.Current(ctx)
-	if v0 != "builtin-1" {
+	if v0 != "builtin-2" {
 		t.Fatalf("version before refresh = %q", v0)
 	}
 	e.ref.RefreshAll(ctx)
 	eng, v1 := e.mgr.Current(ctx)
-	if !strings.HasPrefix(v1, "builtin-1+intel.") {
+	if !strings.HasPrefix(v1, "builtin-2+intel.") {
 		t.Fatalf("version after refresh = %q", v1)
 	}
 	res := eng.Scan(ctx, scanner.MemorySource{"app.js": []byte("const x = 'feed-marker-ABCDEF';")})
@@ -159,8 +159,8 @@ func TestETagNotModifiedAndFeedRemoval(t *testing.T) {
 	// Operator removes the feed from config: its signatures stop applying.
 	e.ref.URLs = nil
 	e.ref.RefreshAll(ctx)
-	if _, v := e.mgr.Current(ctx); v != "builtin-1" {
-		t.Errorf("version after removing feed = %q, want builtin-1", v)
+	if _, v := e.mgr.Current(ctx); v != "builtin-2" {
+		t.Errorf("version after removing feed = %q, want builtin-2", v)
 	}
 }
 

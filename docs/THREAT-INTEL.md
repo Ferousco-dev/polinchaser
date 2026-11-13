@@ -15,7 +15,7 @@ and the dashboard shows it under Detection rules.
 - Feeds are validated strictly (unknown fields, bad severities, duplicate ids and oversized files are rejected).
 - A failed or invalid refresh keeps the previous signatures and records the error in the dashboard.
 - Feeds dropped from `INTEL_FEED_URLS` stop applying at the next worker start or refresh.
-- When the active set changes, the rule version changes (`builtin-1+intel.<hash>`), and the scheduler
+- When the active set changes, the rule version changes (`builtin-2+intel.<hash>`), and the scheduler
   rescans repositories under the new rules.
 
 ## Safety

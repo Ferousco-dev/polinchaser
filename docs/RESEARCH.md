@@ -18,8 +18,14 @@ Sources: OpenSourceMalware/PolinRider dossier and blog, Socket blog posts
   **Implemented:** PC-PER-VSC-001, PC-PER-BAT-001.
 - Loaders reportedly fetch encrypted stage-two from blockchain RPC and XOR-decrypt.
   **Implemented (heuristic):** PC-STA-RPC-001.
-- Exact IOCs shipped: marker `rmcej%otb%`, two reported C2 hostnames. **verify** all.
-  SHA-256 hashes are NOT shipped: the sources I could read truncated them.
+- Exact IOCs shipped (rule set builtin-2), checked against the OpenSourceMalware/PolinRider
+  README (read in part, not the whole file): markers `rmcej` + `%otb%` (split here on purpose) and `Cot%3t` + `=shtP` (split here on purpose); six
+  Vercel C2 hosts; two TRON C2 accounts; two Aptos fallback C2 hashes.
+- Removed in builtin-2: `gowreesh-vt.github.io` and `shop.ceenami.com`. They do not appear
+  in the dossier text I read, so they were unsupported and could flag unrelated sites.
+- Not shipped: SHA-256 file hashes (none seen in the portion read), the npm package names
+  (tailwindcss-style-animate and similar; would need a dependency rule), XOR keys, IPs
+  (the dossier states none). The unread tail of the README may hold more.
 - Reports say git history may be rewritten, so a clean history is not proof of safety.
 
 Not confirmed: the `meSingh/polinrider-scanner` repo named in the brief could not be

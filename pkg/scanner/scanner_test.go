@@ -198,3 +198,26 @@ func TestFindingsDeduplicatedAndSorted(t *testing.T) {
 		t.Fatal("status/highest wrong")
 	}
 }
+
+func TestPolinRiderSignatures(t *testing.T) {
+	// Synthetic strings built from the reported markers; no real payload is reproduced.
+	for id, content := range map[string]string{
+		"PC-SIG-POLINRIDER-001":    `x = ("rmcej` + `%otb%",1)`,
+		"PC-SIG-POLINRIDER-002":    `x = ("Cot%3` + `t=shtP",1)`,
+		"PC-SIG-POLINRIDER-C2-001": `fetch("https://260120.v` + `ercel.app/settings/mac")`,
+		"PC-SIG-POLINRIDER-C2-007": `const a = "TMfKQEd7TJJa5xNZJ` + `Z2Lep838vrzrs7mAP"`,
+	} {
+		r := scan(t, map[string]string{"postcss.config.mjs": content})
+		f := has(r, id)
+		if f == nil || f.Severity != SeverityCritical || f.Confidence != ConfidenceConfirmed {
+			t.Errorf("%s not confirmed: %+v", id, r.Findings)
+		}
+	}
+	// The two hostnames removed for lack of primary-source support must not match any more.
+	r := scan(t, map[string]string{"a.js": `x="gowreesh-vt.github.io shop.ceenami.com"`})
+	for _, f := range r.Findings {
+		if strings.HasPrefix(f.RuleID, "PC-SIG-") {
+			t.Errorf("unverified host still flagged by signature: %s", f.RuleID)
+		}
+	}
+}
