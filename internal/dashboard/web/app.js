@@ -1,9 +1,9 @@
-import { h, icon, api, AuthError, toast, fmt, chip, createPasskey, getPasskey, dropdown } from "./lib.js";
+import { h, icon, api, AuthError, toast, fmt, chip, createPasskey, getPasskey, dropdown, prefetch, clearApiCache } from "./lib.js";
 import { stackedBars, lineChart, hbars } from "./charts.js";
 
 const app = document.getElementById("app");
 const keep = (k) => k.filter((x) => x != null && x !== false);
-const add = (el, ...k) => el.append(...keep(k));
+const add = (el, ...k) => { el.querySelector(":scope > .skel")?.remove(); el.append(...keep(k)); };
 const rep = (el, ...k) => el.replaceChildren(...keep(k));
 const SB_KEY = "pc_sidebar_collapsed";
 const sbGet = () => { try { return localStorage.getItem(SB_KEY) === "1"; } catch { return false; } };
@@ -33,9 +33,11 @@ async function route() {
   document.body.classList.remove("drawer-open");
   const path = location.pathname;
   if (path === "/enroll") return enrollScreen();
-  try { me = await api("/api/auth/me"); } catch (e) {
-    if (e instanceof AuthError) { me = null; return loginScreen(); }
-    return fatal(e);
+  if (!me) {
+    try { me = await api("/api/auth/me"); } catch (e) {
+      if (e instanceof AuthError) { me = null; return loginScreen(); }
+      return fatal(e);
+    }
   }
   shell(path);
 }
@@ -105,7 +107,7 @@ function enrollScreen() {
 // ---------- shell ----------
 function sideSearch(collapsed) {
   if (collapsed) return h("button", { class: "row side-search-icon", "aria-label": "Search findings", title: "Search", onclick: () => {
-    document.body.classList.remove("collapsed"); sbSet(false); shell(location.pathname); setTimeout(() => document.getElementById("side-q")?.focus(), 0); } }, icon("search"));
+    document.body.classList.remove("collapsed"); sbSet(false); shell(location.pathname, true); setTimeout(() => document.getElementById("side-q")?.focus(), 0); } }, icon("search"));
   const input = h("input", { id: "side-q", type: "search", placeholder: "Search findings", "aria-label": "Search findings", autocomplete: "off", maxlength: 120,
     onkeydown: (e) => { if (e.key === "Enter" && input.value.trim()) { go("/findings?" + new URLSearchParams({ q: input.value.trim(), status: "" })); input.blur(); } if (e.key === "Escape") input.blur(); } });
   return h("div", { class: "side-search", role: "search" }, icon("search"), input, h("kbd", { "aria-hidden": "true" }, "/"));
@@ -115,35 +117,75 @@ addEventListener("keydown", (e) => {
   if (e.key === "/" && !e.metaKey && !e.ctrlKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable) { const q = document.getElementById("side-q"); if (q) { e.preventDefault(); q.focus(); } }
 });
 
+const isActive = (path, to) => (to === "/" ? path === "/" : path === to || path.startsWith(to + "/"));
+// The exact API request each top-level page makes first, so hovering a link warms it.
+const PREFETCH = { "/": "/api/overview", "/repositories": "/api/repositories", "/scans": "/api/scans?limit=25&offset=0", "/findings": "",
+  "/observability": "/api/observability?days=14", "/intelligence": "/api/intel", "/system": "/api/system", "/audit": "/api/audit?limit=25&offset=0" };
+
 function sidebar(path) {
   const collapsed = document.body.classList.contains("collapsed");
-  const active = (to) => (to === "/" ? path === "/" : path === to || path.startsWith(to + "/"));
+  const active = (to) => isActive(path, to);
   const row = (n) => h("li", {}, h("a", { class: "row" + (active(n.to) ? " active" : ""), href: n.to, title: n.label,
+    onpointerenter: () => prefetch(PREFETCH[n.to]), onfocus: () => prefetch(PREFETCH[n.to]),
     onclick: (e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(n.to); } }, icon(n.icon), h("span", {}, n.label)));
   return h("aside", { class: "side", "aria-label": "Sidebar" }, h("div", { class: "side-card" },
     h("div", { class: "side-head" },
       h("a", { class: "brand", href: "/", "aria-label": "Chaser overview", onclick: (e) => { e.preventDefault(); go("/"); } }, h("span", { class: "mark" }, icon("shield")), "Chaser"),
       h("button", { class: "icon-btn", "aria-label": collapsed ? "Expand sidebar" : "Collapse sidebar", onclick: () => {
-        const c = document.body.classList.toggle("collapsed"); sbSet(c); shell(location.pathname); } }, icon(collapsed ? "panelOpen" : "panelClose"))),
+        const c = document.body.classList.toggle("collapsed"); sbSet(c); shell(location.pathname, true); } }, icon(collapsed ? "panelOpen" : "panelClose"))),
     sideSearch(collapsed),
     h("nav", { class: "nav", "aria-label": "Primary" }, h("ul", {}, NAV.map((n) => n.sec ? h("li", { class: "nav-sec" }, n.sec) : row(n))))),
     h("div", { class: "side-foot" },
       h("a", { class: "row", href: "/settings", title: "Settings", onclick: (e) => { e.preventDefault(); go("/settings"); } }, icon("settings"), h("span", {}, "Settings")),
-      h("button", { class: "icon-btn signout", "aria-label": "Sign out", title: "Sign out", onclick: async () => { await api("/api/auth/logout", { method: "POST" }).catch(() => {}); go("/"); } }, icon("logout"))));
+      h("button", { class: "icon-btn signout", "aria-label": "Sign out", title: "Sign out", onclick: async () => { await api("/api/auth/logout", { method: "POST" }).catch(() => {}); me = null; ui = null; clearApiCache(); go("/"); } }, icon("logout"))));
 }
 
-function shell(path) {
+let ui = null; // { main } while the signed-in shell is on screen
+
+function setActive(path) {
+  app.querySelectorAll(".side a.row").forEach((x) => x.classList.toggle("active", isActive(path, x.getAttribute("href"))));
+}
+
+// The sidebar is built once. Navigating only swaps the content area, shows a skeleton at
+// once, and writes into a fresh element so a slow earlier page can never overwrite a newer one.
+function shell(path, rebuild) {
   document.body.classList.toggle("collapsed", sbGet());
-  const content = h("div", { class: "content" });
-  rep(app, 
-    sidebar(path), h("div", { class: "scrim", onclick: () => document.body.classList.remove("drawer-open") }),
-    h("div", { class: "main" },
-      h("header", { class: "topbar" }, h("button", { class: "icon-btn", "aria-label": "Open menu", onclick: () => document.body.classList.add("drawer-open") }, icon("menu")), h("strong", {}, "Chaser")),
-      h("main", {}, content)));
+  if (!ui || rebuild || !app.contains(ui.main)) {
+    const main = h("main", {});
+    rep(app,
+      sidebar(path), h("div", { class: "scrim", onclick: () => document.body.classList.remove("drawer-open") }),
+      h("div", { class: "main" },
+        h("header", { class: "topbar" }, h("button", { class: "icon-btn", "aria-label": "Open menu", onclick: () => document.body.classList.add("drawer-open") }, icon("menu")), h("strong", {}, "Chaser")),
+        main));
+    ui = { main };
+  } else setActive(path);
+  const content = h("div", { class: "content" }, skeleton(path));
+  ui.main.replaceChildren(content);
+  window.scrollTo(0, 0);
   const m = path.match(/^\/(scans|findings)\/(\d+)$/);
   const pages = { "/": pOverview, "/repositories": pRepos, "/scans": pScans, "/findings": pFindings, "/observability": pObs, "/intelligence": pIntel, "/system": pSystem, "/audit": pAudit, "/settings": pSettings };
   const fn = m ? (m[1] === "scans" ? () => pScan(content, m[2]) : () => pFinding(content, m[2])) : pages[path] ? () => pages[path](content) : () => add(content, h("div", { class: "empty" }, "Page not found."));
-  Promise.resolve(fn(content)).catch((e) => { if (e instanceof AuthError) return loginScreen(); add(content, h("p", { class: "err" }, e.message)); });
+  Promise.resolve(fn(content)).catch((e) => { if (e instanceof AuthError) { me = null; ui = null; return loginScreen(); } add(content, h("p", { class: "err" }, e.message)); });
+}
+
+// ---------- skeletons ----------
+const sk = (cls, style) => h("div", { class: "sk " + (cls || ""), style });
+const skHead = () => h("div", { class: "page-h" }, h("div", {}, sk("sk-title"), sk("sk-line", "width:260px;margin-top:8px")));
+const skStats = (n) => h("div", { class: "grid g4" }, Array.from({ length: n }, () => h("div", { class: "card stat" }, sk("sk-line", "width:90px"), sk("sk-num"))));
+const skCard = (height) => h("section", { class: "card" }, h("div", { class: "card-h" }, sk("sk-line", "width:140px")), h("div", { class: "card-b" }, sk("sk-block", `height:${height}px`)));
+function skTable(rows = 7) {
+  return h("div", { class: "skel-table" }, Array.from({ length: rows }, () => h("div", { class: "sk-row" }, sk("sk-line", "width:28%"), sk("sk-line", "width:14%"), sk("sk-line", "width:18%"), sk("sk-pill"))));
+}
+const skGrid = (n, height) => h("div", { class: "grid g2" }, Array.from({ length: n }, () => skCard(height)));
+function skeleton(path) {
+  let body;
+  if (path === "/") body = [skStats(4), h("div", { class: "mt" }), skGrid(2, 160)];
+  else if (path === "/observability") body = [skGrid(6, 150)];
+  else if (path === "/system") body = [skStats(4), h("div", { class: "mt" }), skGrid(2, 140)];
+  else if (/^\/(scans|findings)\/\d+$/.test(path)) body = [skCard(120), h("div", { class: "mt" }), skCard(160)];
+  else if (path === "/settings") body = [skCard(120), h("div", { class: "mt" }), skCard(120)];
+  else body = [h("section", { class: "card" }, skTable(8))];
+  return h("div", { class: "skel", role: "status", "aria-label": "Loading" }, skHead(), ...body, h("span", { class: "sr-only" }, "Loading"));
 }
 
 // ---------- helpers ----------
@@ -200,6 +242,7 @@ async function pScans(el) {
   const sel = dropdown({ label: "Status", value: "", onchange: (v) => { state.status = v; state.offset = 0; load(); },
     options: [{ value: "", label: "All statuses" }, ...["clean", "findings_detected", "incomplete", "failed", "timed_out", "running", "queued"].map((v) => ({ value: v, label: fmt.label(v) }))] });
   async function load() {
+    if (!body.firstChild) rep(body, skTable(6));
     const q = new URLSearchParams({ limit: state.limit, offset: state.offset }); if (state.status) q.set("status", state.status);
     const rows = await api("/api/scans?" + q);
     rep(body, table(["Repository", "Trigger", "Commit", "Ref", "Status", "Findings", "When"], rows.map((r) => ({ id: r.id, cells: [
@@ -230,6 +273,7 @@ async function pFindings(el) {
     options: [{ value: "", label }, ...vals.map((v) => ({ value: v, label: fmt.label(v) }))] });
   const search = h("input", { class: "field grow", type: "search", placeholder: "Search path, title or rule", "aria-label": "Search", value: state.q, oninput: () => { clearTimeout(search._t); search._t = setTimeout(() => { state.q = search.value; state.offset = 0; load(); }, 250); } });
   async function load() {
+    if (!body.firstChild) rep(body, skTable(6));
     const q = new URLSearchParams({ limit: state.limit, offset: state.offset }); for (const k of ["severity", "confidence", "status", "q", "repo_id"]) if (state[k]) q.set(k, state[k]);
     const rows = await api("/api/findings?" + q);
     rep(body, table(["Severity", "Confidence", "Finding", "Repository", "File", "Status", "Last seen"], rows.map((f) => ({ id: f.id, cells: [chip(f.severity), chip(f.confidence), h("span", { class: "trunc" }, f.title),
@@ -269,6 +313,7 @@ async function pObs(el) {
   const body = h("div", {});
   const sel = dropdown({ label: "Range", value: 14, onchange: (v) => { state.days = Number(v); load(); }, options: [7, 14, 30, 90].map((d) => ({ value: d, label: `Last ${d} days` })) });
   async function load() {
+    if (!body.firstChild) rep(body, skGrid(6, 150));
     const d = await api("/api/observability?days=" + state.days);
     const any = d.scans.some((x) => x.clean + x.findings_detected + x.incomplete + x.failed > 0);
     rep(body, 
@@ -310,6 +355,7 @@ async function pSystem(el) {
 async function pAudit(el) {
   const state = { limit: 25, offset: 0 }, body = h("div", {});
   async function load() {
+    if (!body.firstChild) rep(body, skTable(6));
     const rows = await api(`/api/audit?limit=${state.limit}&offset=${state.offset}`);
     rep(body, table(["When", "Actor", "Action", "Target", "Detail"], rows.map((r) => ({ cells: [fmt.date(r.created_at), h("span", { class: "mono" }, r.actor), r.action, r.target || "–", h("span", { class: "hint trunc" }, r.detail && Object.keys(r.detail).length ? JSON.stringify(r.detail) : "")] }))), pager(state, load, rows.length));
   }

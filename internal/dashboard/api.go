@@ -62,11 +62,14 @@ func (d *Dashboard) Routes(mux *http.ServeMux) {
 		fmt.Fprint(w, "User-agent: *\nDisallow: /\n")
 	})
 	sub, _ := fs.Sub(webFS, "web")
-	assets := http.FileServer(http.FS(sub))
-	mux.Handle("GET /assets/", http.StripPrefix("/assets/", noCache(assets)))
+	assets, err := staticHandler(sub)
+	if err != nil {
+		panic("dashboard: embedded assets unreadable: " + err.Error())
+	}
+	mux.Handle("GET /assets/", http.StripPrefix("/assets/", assets))
 	mux.HandleFunc("GET /favicon.svg", func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/favicon.svg"
-		noCache(assets).ServeHTTP(w, r)
+		assets.ServeHTTP(w, r)
 	})
 	index, _ := fs.ReadFile(sub, "index.html")
 	spa := func(w http.ResponseWriter, r *http.Request) {
@@ -79,13 +82,6 @@ func (d *Dashboard) Routes(mux *http.ServeMux) {
 		_, _ = w.Write(index)
 	}
 	mux.HandleFunc("GET /{path...}", spa)
-}
-
-func noCache(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache")
-		h.ServeHTTP(w, r)
-	})
 }
 
 func out(w http.ResponseWriter, code int, v any) {

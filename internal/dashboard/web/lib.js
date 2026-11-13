@@ -63,7 +63,38 @@ export function icon(name, size) {
 
 export class AuthError extends Error {}
 
+// Short-lived in-memory GET cache: back/forward and repeat visits feel instant, hovering a
+// nav link warms the next page, and duplicate in-flight requests share one round trip.
+// Any write clears it, and nothing is persisted to disk (responses stay private).
+const CACHE_TTL = 20000;
+const cache = new Map();
+const inflight = new Map();
+export function clearApiCache() { cache.clear(); inflight.clear(); }
+export function prefetch(path) { if (path && path.startsWith("/api/")) api(path).catch(() => {}); }
+const clone = (v) => (v == null ? v : typeof structuredClone === "function" ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
+
 export async function api(path, { method = "GET", body, raw } = {}) {
+  const cacheable = method === "GET" && !path.startsWith("/api/auth/");
+  if (method !== "GET") clearApiCache();
+  if (cacheable) {
+    const hit = cache.get(path);
+    if (hit && Date.now() - hit.t < CACHE_TTL) return clone(hit.data);
+    if (inflight.has(path)) return clone(await inflight.get(path));
+  }
+  const run = request(path, { method, body, raw });
+  if (!cacheable) return run;
+  inflight.set(path, run);
+  try {
+    const data = await run;
+    cache.set(path, { t: Date.now(), data });
+    return clone(data);
+  } catch (e) {
+    if (e instanceof AuthError) clearApiCache();
+    throw e;
+  } finally { inflight.delete(path); }
+}
+
+async function request(path, { method, body, raw }) {
   const res = await fetch(path, {
     method, credentials: "same-origin", cache: "no-store",
     headers: body !== undefined && !raw ? { "Content-Type": "application/json" } : undefined,
